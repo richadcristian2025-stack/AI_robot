@@ -1,0 +1,164 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Model files
+*.pth
+*.bin
+*.h5
+*.hdf5
+*.pt
+*.pkl
+
+# Audio files
+*.wav
+*.mp3
+*.ogg
+
+# Arduino
+.pio/
+.arduino15/
+*.hex
+*.eep
+*.elf
+*.a
+*.o
+*.bin
+*.lss
+*.sym
+*.lss
+*.map
+*.elf
+*.eep
+*.srec
+*.bin
+*.hex
+*.tmp
+*.log
+.DS_Store
+
+# Project specific
+*.mp3
+*.wav
+*.pkl
+*.h5
+*.pth
+*.bin
+*.onnx
+*.tflite
+*.pb
+*.tfl
+*.lite
+*.mlmodel
+*.mlpackage
+*.weights
+*.cfg
+*.names
+*.data
+*.meta
+*.index
+*.data-00000-of-00001
+*.tflitemetadata
+*.json
+*.xml
+*.csv
+*.txt
+*.log
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.ico
+*.svg
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.zip
+*.tar.gz
+*.tar
+*.7z
+*.rar
+*.gz
+*.bz2
+*.iso
+*.img
+*.dmg
+*.exe
+*.msi
+*.msm
+*.msp
+*.tmp
+*.temp
+*.tmp.*
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python virtual environment
+venv/
+ENV/
+
+# Spyder project settings
+.spyproject/
+
+# Rope project settings
+.ropeproject/
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
