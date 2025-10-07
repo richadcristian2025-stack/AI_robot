@@ -10,26 +10,24 @@ DFRobot_DHT11 DHT;
 
 // === Variables ===
 String inputString = "";
-boolean stringComplete = false;
 int potVal = 0;
 
 void setup() {
   Serial.begin(9600);
   
-  // LED Setup - langsung pakai nomor pin
-  pinMode(13, OUTPUT);
-  pinMode(11, OUTPUT);
-  pinMode(10, OUTPUT);
-  pinMode(9, OUTPUT);
-  pinMode(8, OUTPUT);
+  // LED Setup - sesuai PANDUAN.md
+  pinMode(13, OUTPUT);  // LED 1 - Merah
+  pinMode(11, OUTPUT);  // LED 2 - Kuning
+  pinMode(10, OUTPUT);  // LED 3 - Hijau
+  pinMode(9, OUTPUT);   // LED 4 - Biru
+  pinMode(8, OUTPUT);   // LED 5 - Putih
   
-  // Servo Setup
-  myServo.attach(9);  // Pin 9 untuk servo
+  // Buzzer Setup
+  pinMode(6, OUTPUT);   // Buzzer/Speaker
+  
+  // Servo Setup - dipindah ke pin 7
+  myServo.attach(7);    // Pin 7 untuk servo
   myServo.write(90);   // Posisi netral
-  
-  // LCD Setup
-  Wire.begin();
-  lcd.begin(&Wire);
   lcd.display();
   lcd.backlight();
   lcd.clear();
@@ -216,38 +214,67 @@ void handleLED(String cmd) {
 // ============================================================================
 
 void handleSpeaker(String cmd) {
-  // Format: S500:2 (500Hz selama 2 detik)
+  // Format: S500:2 (500Hz selama 2 detik) or S500:1;S1000:1 (multiple tones)
   
-  int colonPos = cmd.indexOf(':');
-  int frequency = cmd.substring(1, colonPos).toInt();
-  int duration = cmd.substring(colonPos + 1).toInt();
+  // Split multiple commands if any
+  int cmdCount = 0;
+  int lastSemicolon = -1;
   
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Speaker:");
-  lcd.print(frequency);
-  lcd.print("Hz");
-  lcd.setCursor(0, 1);
-  lcd.print("Duration:");
-  lcd.print(duration);
-  lcd.print("s");
+  do {
+    int nextSemicolon = cmd.indexOf(';', lastSemicolon + 1);
+    String singleCmd;
+    
+    if (nextSemicolon == -1) {
+      singleCmd = cmd.substring(lastSemicolon + 1);
+    } else {
+      singleCmd = cmd.substring(lastSemicolon + 1, nextSemicolon);
+    }
+    
+    // Process single command
+    if (singleCmd.length() > 0 && singleCmd[0] == 'S') {
+      int colonPos = singleCmd.indexOf(':');
+      if (colonPos != -1) {
+        int frequency = singleCmd.substring(1, colonPos).toInt();
+        int duration = singleCmd.substring(colonPos + 1).toInt();
+        
+        // Only update display for the first command
+        if (cmdCount == 0) {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Playing Sound");
+          lcd.setCursor(0, 1);
+          lcd.print(frequency);
+          lcd.print("Hz ");
+          lcd.print(duration);
+          lcd.print("s");
+        }
+        
+        // Play the tone
+        if (frequency > 0) {
+          tone(6, frequency, duration * 1000);  // Buzzer on pin 6
+          delay(duration * 1000);
+          noTone(6);
+        } else {
+          noTone(6);  // Turn off sound if frequency is 0
+        }
+        
+        Serial.print("Playing: ");
+        Serial.print(frequency);
+        Serial.print("Hz for ");
+        Serial.print(duration);
+        Serial.println("s");
+        
+        cmdCount++;
+      }
+    }
+    
+    lastSemicolon = nextSemicolon;
+  } while (lastSemicolon != -1);
   
-  tone(13, frequency, duration * 1000);  // Buzzer di pin 13
-  
-  Serial.print("OK: Speaker ");
-  Serial.print(frequency);
-  Serial.print("Hz for ");
-  Serial.print(duration);
-  Serial.println("s");
-  
-  delay(duration * 1000);
-  lcd.clear();
+  if (cmdCount > 0) {
+    lcd.clear();
+  }
 }
-
-// ============================================================================
-// SERVO HANDLER dengan REPEAT SUPPORT
-// ============================================================================
-
 void handleServo(String cmd) {
   // Format: MF:360:4 (Forward 360° × 4 kali)
   //         MB:180:1 (Backward 180° × 1 kali)
