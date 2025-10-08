@@ -65,7 +65,7 @@ def process_audio():
         
         # Make log-Mel spectrogram and move to the same device as model
         mel = whisper.log_mel_spectrogram(audio).to(model.device)
-        
+    
         # Detect the spoken language
         _, probs = model.detect_language(mel)
         detected_lang = max(probs, key=probs.get)
