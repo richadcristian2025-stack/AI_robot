@@ -14,4 +14,4 @@ Send to Arduino via Serial
     ↓
 robot.ino (Arduino)
     ↓
-LED/Motor action
+Arduino action
