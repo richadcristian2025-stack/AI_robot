@@ -3,6 +3,20 @@
 #include <DFRobot_DHT11.h>
 #include <Wire.h>
 
+// === PIN DEFINITIONS ===
+// OUTPUT PINS
+#define LED_RED    13
+#define LED_YELLOW 12
+#define LED_GREEN  11
+#define LED_BLUE   10
+#define LED_WHITE  9
+#define BUZZER     8
+#define SERVO_PIN  7
+
+// INPUT PINS
+#define POT_PIN    A0
+#define DHT_PIN    2
+
 // === Objects ===
 Servo myServo;
 LCD_I2C lcd(0x27, 16, 2);
@@ -10,24 +24,34 @@ DFRobot_DHT11 DHT;
 
 // === Variables ===
 String inputString = "";
+bool stringComplete = false;
 int potVal = 0;
 
 void setup() {
   Serial.begin(9600);
   
-  // LED Setup - sesuai PANDUAN.md
-  pinMode(13, OUTPUT);  // LED 1 - Merah
-  pinMode(11, OUTPUT);  // LED 2 - Kuning
-  pinMode(10, OUTPUT);  // LED 3 - Hijau
-  pinMode(9, OUTPUT);   // LED 4 - Biru
-  pinMode(8, OUTPUT);   // LED 5 - Putih
+  // LED Setup
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_YELLOW, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LED_WHITE, OUTPUT);
   
   // Buzzer Setup
-  pinMode(6, OUTPUT);   // Buzzer/Speaker
+  pinMode(BUZZER, OUTPUT);
   
-  // Servo Setup - dipindah ke pin 7
-  myServo.attach(7);    // Pin 7 untuk servo
+  // Servo Setup
+  myServo.attach(SERVO_PIN);
   myServo.write(90);   // Posisi netral
+  
+  // Potentiometer (analog input tidak perlu pinMode)
+  // pinMode(POT_PIN, INPUT); // Opsional, default sudah INPUT
+  
+  // DHT11 Sensor (handled by library)
+  // pinMode(DHT_PIN, INPUT); // Library akan mengatur ini
+  
+  // LCD Setup (I2C pins A4/A5 diatur otomatis oleh Wire.h)
+  lcd.begin();
   lcd.display();
   lcd.backlight();
   lcd.clear();
@@ -43,7 +67,7 @@ void setup() {
 
 void loop() {
   // Baca potensio untuk kontrol servo manual (opsional)
-  potVal = analogRead(A0);
+  potVal = analogRead(POT_PIN);
   potVal = map(potVal, 0, 1023, 0, 180);
   
   if (stringComplete) {
@@ -117,43 +141,43 @@ void handleLED(String cmd) {
     lcd.print(state == 1 ? "ON" : state == 2 ? "BLINK" : "OFF");
     
     if (state == 0) {
-      digitalWrite(13, LOW);
-      digitalWrite(11, LOW);
-      digitalWrite(10, LOW);
-      digitalWrite(9, LOW);
-      digitalWrite(8, LOW);
+      digitalWrite(LED_RED, LOW);
+      digitalWrite(LED_YELLOW, LOW);
+      digitalWrite(LED_GREEN, LOW);
+      digitalWrite(LED_BLUE, LOW);
+      digitalWrite(LED_WHITE, LOW);
     } 
     else if (state == 1) {
-      digitalWrite(13, HIGH);
-      digitalWrite(11, HIGH);
-      digitalWrite(10, HIGH);
-      digitalWrite(9, HIGH);
-      digitalWrite(8, HIGH);
+      digitalWrite(LED_RED, HIGH);
+      digitalWrite(LED_YELLOW, HIGH);
+      digitalWrite(LED_GREEN, HIGH);
+      digitalWrite(LED_BLUE, HIGH);
+      digitalWrite(LED_WHITE, HIGH);
       
       if (duration > 0) {
         delay(duration * 1000);
-        digitalWrite(13, LOW);
-        digitalWrite(11, LOW);
-        digitalWrite(10, LOW);
-        digitalWrite(9, LOW);
-        digitalWrite(8, LOW);
+        digitalWrite(LED_RED, LOW);
+        digitalWrite(LED_YELLOW, LOW);
+        digitalWrite(LED_GREEN, LOW);
+        digitalWrite(LED_BLUE, LOW);
+        digitalWrite(LED_WHITE, LOW);
       }
     } 
     else if (state == 2) {
       // Blink all
       int times = duration > 0 ? duration * 2 : 10;
       for (int i = 0; i < times; i++) {
-        digitalWrite(13, HIGH);
-        digitalWrite(11, HIGH);
-        digitalWrite(10, HIGH);
-        digitalWrite(9, HIGH);
-        digitalWrite(8, HIGH);
+        digitalWrite(LED_RED, HIGH);
+        digitalWrite(LED_YELLOW, HIGH);
+        digitalWrite(LED_GREEN, HIGH);
+        digitalWrite(LED_BLUE, HIGH);
+        digitalWrite(LED_WHITE, HIGH);
         delay(250);
-        digitalWrite(13, LOW);
-        digitalWrite(11, LOW);
-        digitalWrite(10, LOW);
-        digitalWrite(9, LOW);
-        digitalWrite(8, LOW);
+        digitalWrite(LED_RED, LOW);
+        digitalWrite(LED_YELLOW, LOW);
+        digitalWrite(LED_GREEN, LOW);
+        digitalWrite(LED_BLUE, LOW);
+        digitalWrite(LED_WHITE, LOW);
         delay(250);
       }
     }
@@ -216,7 +240,6 @@ void handleLED(String cmd) {
 void handleSpeaker(String cmd) {
   // Format: S500:2 (500Hz selama 2 detik) or S500:1;S1000:1 (multiple tones)
   
-  // Split multiple commands if any
   int cmdCount = 0;
   int lastSemicolon = -1;
   
@@ -237,7 +260,6 @@ void handleSpeaker(String cmd) {
         int frequency = singleCmd.substring(1, colonPos).toInt();
         int duration = singleCmd.substring(colonPos + 1).toInt();
         
-        // Only update display for the first command
         if (cmdCount == 0) {
           lcd.clear();
           lcd.setCursor(0, 0);
@@ -249,13 +271,12 @@ void handleSpeaker(String cmd) {
           lcd.print("s");
         }
         
-        // Play the tone
         if (frequency > 0) {
-          tone(6, frequency, duration * 1000);  // Buzzer on pin 6
+          tone(BUZZER, frequency, duration * 1000);
           delay(duration * 1000);
-          noTone(6);
+          noTone(BUZZER);
         } else {
-          noTone(6);  // Turn off sound if frequency is 0
+          noTone(BUZZER);
         }
         
         Serial.print("Playing: ");
@@ -275,6 +296,11 @@ void handleSpeaker(String cmd) {
     lcd.clear();
   }
 }
+
+// ============================================================================
+// SERVO HANDLER
+// ============================================================================
+
 void handleServo(String cmd) {
   // Format: MF:360:4 (Forward 360° × 4 kali)
   //         MB:180:1 (Backward 180° × 1 kali)
@@ -305,7 +331,6 @@ void handleServo(String cmd) {
   Serial.print(repeat);
   Serial.println(" times");
   
-  // Execute servo movement dengan repeat
   for (int i = 0; i < repeat; i++) {
     lcd.setCursor(13, 1);
     lcd.print(i + 1);
@@ -313,14 +338,12 @@ void handleServo(String cmd) {
     lcd.print(repeat);
     
     if (direction == 'F') {
-      // Clockwise (Maju)
       rotateServo(true, degrees);
     } else {
-      // Counter-clockwise (Mundur)
       rotateServo(false, degrees);
     }
     
-    delay(500);  // Jeda antar repeat
+    delay(500);
   }
   
   delay(500);
@@ -328,18 +351,12 @@ void handleServo(String cmd) {
 }
 
 void rotateServo(bool clockwise, int degrees) {
-  // Servo continuous rotation
-  // 0° = CCW, 90° = Stop, 180° = CW
-  
   int speed = clockwise ? 180 : 0;
   myServo.write(speed);
   
-  // Estimasi waktu rotasi (sesuaikan dengan servo kamu)
-  // Asumsi: 60 RPM = 360°/detik
   int duration = (degrees * 1000) / 360;
   delay(duration);
   
-  // Stop
   myServo.write(90);
 }
 
@@ -348,7 +365,7 @@ void rotateServo(bool clockwise, int degrees) {
 // ============================================================================
 
 void handleTemperature() {
-  DHT.read(11);  // DHT11 di pin 11
+  DHT.read(DHT_PIN);
   
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -371,11 +388,11 @@ void handleTemperature() {
   
   // Auto control LED berdasarkan suhu
   if (DHT.temperature > 28) {
-    digitalWrite(10, HIGH);
-    digitalWrite(8, LOW);
+    digitalWrite(LED_GREEN, HIGH);
+    digitalWrite(LED_WHITE, LOW);
   } else {
-    digitalWrite(10, LOW);
-    digitalWrite(8, HIGH);
+    digitalWrite(LED_GREEN, LOW);
+    digitalWrite(LED_WHITE, HIGH);
   }
   
   delay(3000);
@@ -387,7 +404,7 @@ void handleTemperature() {
 // ============================================================================
 
 void handleHumidity() {
-  DHT.read(11);  // DHT11 di pin 11
+  DHT.read(DHT_PIN);
   
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -416,7 +433,6 @@ void handleLCD(String cmd) {
   lcd.clear();
   lcd.setCursor(0, 0);
   
-  // Split message jika lebih dari 16 karakter
   if (message.length() <= 16) {
     lcd.print(message);
   } else {

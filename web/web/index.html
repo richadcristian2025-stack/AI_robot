@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="id">
+    <html>
+        <head>
+            <title>Voice Robot</title>
+            <link rel="stylesheet" href="/static/css/style.css">
+            <link rel="stylesheet" href="/static/css/style-new.css">
+            <link rel="stylesheet" href="/static/css/style-beautiful.css">
+        </head>
+        <body>
+            <!-- UI elements -->
+        </body>
+        </html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Voice Controlled Robot - AI Interface</title>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Your CSS Files -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style-new.css">
+    <link rel="stylesheet" href="/static/css/style-beautiful.css">
+</head>
+<body>
+    <!-- Connection Status -->
+    <div class="connection-status disconnected" id="connectionStatus">
+        <span class="status-dot disconnected" id="statusDot"></span>
+        <span id="connectionText">Checking connection...</span>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🤖 Voice Controlled Robot</h1>
+            <p class="subtitle">Tekan tombol mikrofon dan ucapkan perintah Anda</p>
+            <div class="status disconnected" id="arduinoStatus">
+                <span class="dot"></span>
+                <span id="statusText">Checking Arduino...</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Column: Microphone & Results -->
+            <div class="command-section">
+                <!-- Microphone Section -->
+                <div class="mic-section">
+                    <button class="mic-button" id="micButton" aria-label="Microphone">
+                        <i class="fas fa-microphone" id="micIcon"></i>
+                        <div class="pulse-ring"></div>
+                        <span class="mic-tooltip">Klik untuk mulai merekam</span>
+                    </button>
+                    <div class="mic-status" id="micStatus">Klik mikrofon untuk memulai</div>
+                </div>
+
+                <!-- Result Box -->
+                <div class="card result-box">
+                    <h2><i class="fas fa-chart-line"></i> Hasil Perintah</h2>
+                    <div class="result-item">
+                        <span class="result-label">📝 Teks Terdeteksi:</span>
+                        <span class="command-text" id="recognizedText">-</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">⚙️ Perintah Arduino:</span>
+                        <span class="command-text" id="arduinoCommand">-</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">✅ Respon Robot:</span>
+                        <span class="response-text" id="robotResponse">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Suggestions & History -->
+            <div class="suggestions-section">
+                <h2><i class="fas fa-lightbulb"></i> Contoh Perintah</h2>
+                
+                <div class="suggestions-grid">
+                    <div class="suggestion-chip" data-command="nyala">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>Nyalakan lampu</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="matikan">
+                        <i class="fas fa-power-off"></i>
+                        <span>Matikan lampu</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="maju">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>Maju</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="mundur">
+                        <i class="fas fa-arrow-down"></i>
+                        <span>Mundur</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="kiri">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Belok kiri</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="kanan">
+                        <i class="fas fa-arrow-right"></i>
+                        <span>Belok kanan</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="berhenti">
+                        <i class="fas fa-stop"></i>
+                        <span>Berhenti</span>
+                    </div>
+                    <div class="suggestion-chip" data-command="alarm">
+                        <i class="fas fa-bell"></i>
+                        <span>Aktifkan alarm</span>
+                    </div>
+                </div>
+
+                <!-- Command History -->
+                <div class="history-section">
+                    <h3><i class="fas fa-history"></i> Riwayat Perintah</h3>
+                    <div class="history-list" id="historyList">
+                        <p style="text-align: center; color: var(--gray-400); padding: 1rem;">
+                            Belum ada riwayat perintah
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="notification" id="notification">
+        <i class="fas fa-info-circle"></i>
+        <span id="notificationText">Notification</span>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        const micButton = document.getElementById('micButton');
+        const micIcon = document.getElementById('micIcon');
+        const micStatus = document.getElementById('micStatus');
+        const recognizedText = document.getElementById('recognizedText');
+        const arduinoCommand = document.getElementById('arduinoCommand');
+        const robotResponse = document.getElementById('robotResponse');
+        const historyList = document.getElementById('historyList');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const statusDot = document.getElementById('statusDot');
+        const connectionText = document.getElementById('connectionText');
+        const arduinoStatus = document.getElementById('arduinoStatus');
+        const statusText = document.getElementById('statusText');
+        const notification = document.getElementById('notification');
+        const notificationText = document.getElementById('notificationText');
+
+        // Check connection on load
+        checkConnection();
+        setInterval(checkConnection, 5000);
+
+        // Check connection
+        async function checkConnection() {
+            try {
+                const response = await fetch('/api/check-connection');
+                const data = await response.json();
+                
+                if (data.connected) {
+                    connectionStatus.classList.remove('disconnected');
+                    connectionStatus.classList.add('connected');
+                    statusDot.classList.remove('disconnected');
+                    statusDot.classList.add('connected');
+                    connectionText.textContent = `✅ ${data.message}`;
+                    
+                    arduinoStatus.classList.remove('disconnected');
+                    arduinoStatus.classList.add('connected');
+                    statusText.textContent = `Terhubung: ${data.port}`;
+                } else {
+                    connectionStatus.classList.remove('connected');
+                    connectionStatus.classList.add('disconnected');
+                    statusDot.classList.remove('connected');
+                    statusDot.classList.add('disconnected');
+                    connectionText.textContent = `⚠️ Mode Simulasi`;
+                    
+                    arduinoStatus.classList.remove('connected');
+                    arduinoStatus.classList.add('disconnected');
+                    statusText.textContent = 'Mode Simulasi - Arduino tidak terhubung';
+                }
+            } catch (error) {
+                console.error('Connection check error:', error);
+                connectionText.textContent = '❌ Error koneksi';
+            }
+        }
+
+        // Microphone button click
+        micButton.addEventListener('click', async () => {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        // Start recording
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    await sendAudio(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                micButton.classList.add('recording');
+                micIcon.className = 'fas fa-stop';
+                micStatus.textContent = '🔴 Merekam... Klik lagi untuk berhenti';
+                showNotification('Merekam audio...', 'info');
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                micStatus.textContent = '❌ Gagal mengakses mikrofon';
+                showNotification('Gagal mengakses mikrofon!', 'error');
+            }
+        }
+
+        // Stop recording
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                micButton.classList.remove('recording');
+                micIcon.className = 'fas fa-microphone';
+                micStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses audio...';
+            }
+        }
+
+        // Send audio to server
+        async function sendAudio(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'audio.wav');
+
+                micStatus.innerHTML = '<i class="fas fa-cog fa-spin"></i> Mengirim ke server...';
+
+                const response = await fetch('/api/process_audio', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    recognizedText.textContent = result.text || '-';
+                    arduinoCommand.textContent = result.command || '-';
+                    robotResponse.textContent = result.response || '-';
+                    micStatus.textContent = '✅ Perintah berhasil diproses!';
+                    showNotification('Perintah berhasil!', 'success');
+                    
+                    // Add to history
+                    addToHistory(result);
+                } else {
+                    recognizedText.textContent = result.text || 'Tidak terdeteksi';
+                    arduinoCommand.textContent = '-';
+                    robotResponse.textContent = result.response || result.message || 'Perintah tidak dikenali';
+                    micStatus.textContent = '⚠️ ' + (result.response || 'Perintah tidak dikenali');
+                    showNotification(result.response || 'Perintah tidak dikenali', 'warning');
+                }
+
+                // Reset after 3 seconds
+                setTimeout(() => {
+                    micStatus.textContent = 'Klik mikrofon untuk memulai';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error sending audio:', error);
+                micStatus.textContent = '❌ Gagal memproses audio';
+                showNotification('Error: ' + error.message, 'error');
+            }
+        }
+
+        // Add to history
+        function addToHistory(result) {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <div>
+                    <div class="history-command">
+                        <i class="fas fa-comment-dots"></i> ${result.text}
+                    </div>
+                    <div class="history-response">${result.response}</div>
+                </div>
+                <div class="history-time">${result.timestamp || new Date().toLocaleTimeString('id-ID')}</div>
+            `;
+            
+            // Remove "no history" message
+            if (historyList.querySelector('p')) {
+                historyList.innerHTML = '';
+            }
+            
+            historyList.insertBefore(historyItem, historyList.firstChild);
+            
+            // Keep only last 10 items
+            while (historyList.children.length > 10) {
+                historyList.removeChild(historyList.lastChild);
+            }
+        }
+
+        // Suggestion chip click
+        document.querySelectorAll('.suggestion-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                const command = this.dataset.command;
+                
+                // Visual feedback
+                this.classList.add('pressed');
+                setTimeout(() => this.classList.remove('pressed'), 200);
+                
+                // Simulate voice command
+                processTextCommand(command);
+            });
+        });
+
+        // Process text command
+        async function processTextCommand(text) {
+            micStatus.innerHTML = '<i class="fas fa-cog fa-spin"></i> Memproses perintah...';
+            
+            try {
+                // Create a simple audio blob (silence) since we're sending text
+                const blob = new Blob([new Uint8Array(16000)], { type: 'audio/wav' });
+                
+                // For text commands, we'll just show the result directly
+                // In a real implementation, you'd send this to a text processing endpoint
+                
+                showNotification(`Menjalankan: ${text}`, 'info');
+                
+                recognizedText.textContent = text;
+                micStatus.textContent = `⚙️ Memproses: ${text}...`;
+                
+                setTimeout(() => {
+                    micStatus.textContent = 'Klik mikrofon untuk memulai';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error processing text command:', error);
+                showNotification('Error memproses perintah', 'error');
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            notificationText.textContent = message;
+            notification.className = 'notification show ' + type;
+            
+            // Update icon based on type
+            const icon = notification.querySelector('i');
+            if (type === 'success') {
+                icon.className = 'fas fa-check-circle';
+            } else if (type === 'error') {
+                icon.className = 'fas fa-exclamation-circle';
+            } else if (type === 'warning') {
+                icon.className = 'fas fa-exclamation-triangle';
+            } else {
+                icon.className = 'fas fa-info-circle';
+            }
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Load history on page load
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+                
+                if (data.status === 'ok' && data.history.length > 0) {
+                    historyList.innerHTML = '';
+                    data.history.forEach(item => {
+                        addToHistory(item);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
+            }
+        }
+
+        // Load history on startup
+        loadHistory();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+                micButton.click();
+            }
+        });
+
+        console.log('🤖 Voice Robot Interface Ready!');
+        console.log('Press SPACE or click microphone to start recording');
+    </script>
+</body>
+</html>
