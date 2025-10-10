@@ -50,6 +50,9 @@ class MLRobotAI:
             ("terangin dong", "light_on"),
             ("on lampu", "light_on"),
             ("aktifkan cahaya", "light_on"),
+            ("nyalain ya", "light_on"),
+            ("nyalain dong", "light_on"),
+            ("gelap oi", "light_on"),
             
             # LIGHT OFF
             ("matikan lampu", "light_off"),
@@ -57,7 +60,7 @@ class MLRobotAI:
             ("padamkan", "light_off"),
             ("off lampunya", "light_off"),
             ("matiin deh", "light_off"),
-            ("gelapin", "light_off"),
+            ("masa depan mu", "light_off"),
             
             # FORWARD
             ("maju", "move_forward"),
@@ -74,6 +77,7 @@ class MLRobotAI:
             ("mundur robot", "move_backward"),
             ("back", "move_backward"),
             ("mundurin", "move_backward"),
+            ("atrek", "move_backward"),
             
             # LEFT
             ("kiri", "move_left"),
@@ -81,6 +85,7 @@ class MLRobotAI:
             ("ke kiri", "move_left"),
             ("turn left", "move_left"),
             ("belok ke kiri", "move_left"),
+            ("NONA MANIS PUTAR LAH KE KIRI", "move_left"),
             
             # RIGHT
             ("kanan", "move_right"),
@@ -88,6 +93,8 @@ class MLRobotAI:
             ("ke kanan", "move_right"),
             ("turn right", "move_right"),
             ("belok ke kanan", "move_right"),
+            ("NONA MANIS PUTAR LAH KEKANAN", "move_right"),
+            
             
             # STOP
             ("berhenti", "stop"),
@@ -95,7 +102,9 @@ class MLRobotAI:
             ("diam", "stop"),
             ("berhenti robot", "stop"),
             ("jangan jalan", "stop"),
-            ("semuanya diammm", "stop"),
+            ("semuanya mati", "stop"),
+            ("matikan semua", "stop"),
+            ("SEMUANYA DIAMMMM", "stop"),
             
             # TEMPERATURE
             ("suhu", "read_temperature"),
@@ -103,6 +112,10 @@ class MLRobotAI:
             ("berapa suhu", "read_temperature"),
             ("temperature", "read_temperature"),
             ("panas berapa", "read_temperature"),
+            ("seberapa dingin", "read_temperature"),
+            ("seberapa panas", "read_temperature"),
+            ("KOK PANAS", "read_temperature"),
+            ("KOK DINGIN", "read_temperature"),
             
             # HUMIDITY
             ("kelembaban", "read_humidity"),
