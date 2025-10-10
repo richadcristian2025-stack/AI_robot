@@ -95,6 +95,7 @@ class MLRobotAI:
             ("diam", "stop"),
             ("berhenti robot", "stop"),
             ("jangan jalan", "stop"),
+            ("semuanya diammm", "stop"),
             
             # TEMPERATURE
             ("suhu", "read_temperature"),
