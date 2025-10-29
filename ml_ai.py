@@ -21,17 +21,42 @@ class MLRobotAI:
     def __init__(self):
         self.pipeline = None
         self.command_map = {
-            "light_on": "L13:1:5",
+            # Individual lights control
+            "red_light_on": "L13:1:0",
+            "red_light_off": "L13:0:0",
+            "yellow_light_on": "L12:1:0",
+            "yellow_light_off": "L12:0:0",
+            "green_light_on": "L11:1:0",
+            "green_light_off": "L11:0:0",
+            "blue_light_on": "L10:1:0",
+            "blue_light_off": "L10:0:0",
+            "white_light_on": "L9:1:0",
+            "white_light_off": "L9:0:0",
+            
+            # Generic light controls
+            "light_on": "L13:1:0",  # Default to red LED
             "light_off": "L13:0:0",
+            
+            # Group controls
+            "all_lights_on": "L13:1:0;L12:1:0;L11:1:0;L10:1:0;L9:1:0",
+            "all_lights_off": "L13:0:0;L12:0:0;L11:0:0;L10:0:0;L9:0:0",
+            
+            # Movement commands
             "move_forward": "MF:90:1",
             "move_backward": "MB:90:1",
             "move_left": "ML:90:1",
             "move_right": "MR:90:1",
+            "turn_left": "ML:90:1",
+            "turn_right": "MR:90:1",
             "stop": "MS:0:0",
+            
+            # Sensors
             "read_temperature": "TR",
             "read_humidity": "HR",
+            
+            # Sound
             "alarm": "S1000:1;S2000:1;S1000:1",
-            "beep": "S1000:1",
+            "beep": "S2000:1"
         }
         
         self.is_trained = False
@@ -42,17 +67,22 @@ class MLRobotAI:
         Returns: (texts, labels)
         """
         training_data = [
-            # LIGHT ON
+            # Red light
+            ("nyalakan lampu merah", "red_light_on"),
+            ("hidupkan lampu merah", "red_light_on"),
+            ("matikan lampu merah", "red_light_off"),
+            ("lampu merah nyala", "red_light_on"),
+            ("lampu merah mati", "red_light_off"),
+            
+            # LIGHT ON (Generic)
             ("nyalakan lampu", "light_on"),
-            ("hidupin lampunya", "light_on"),
-            ("tolong nyalakan", "light_on"),
-            ("lampu hidup", "light_on"),
-            ("terangin dong", "light_on"),
-            ("on lampu", "light_on"),
-            ("aktifkan cahaya", "light_on"),
-            ("nyalain ya", "light_on"),
-            ("nyalain dong", "light_on"),
-            ("gelap oi", "light_on"),
+            ("hidupkan lampu", "light_on"),
+            ("lampu nyala", "light_on"),
+            ("turn on the light", "light_on"),
+            ("turn on light", "light_on"),
+            ("light on", "light_on"),
+            ("on the light", "light_on"),
+            ("switch on", "light_on"),
             
             # LIGHT OFF
             ("matikan lampu", "light_off"),
@@ -61,6 +91,10 @@ class MLRobotAI:
             ("off lampunya", "light_off"),
             ("matiin deh", "light_off"),
             ("masa depan mu", "light_off"),
+            ("turn off the light", "light_off"),
+            ("turn off light", "light_off"),
+            ("light off", "light_off"),
+            ("switch off", "light_off"),
             
             # FORWARD
             ("maju", "move_forward"),

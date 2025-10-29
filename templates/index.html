@@ -1,135 +1,551 @@
 <!DOCTYPE html>
-<html lang="id">
-    <html>
-        <head>
-            <title>Voice Robot</title>
-            <link rel="stylesheet" href="/static/css/style.css">
-            <link rel="stylesheet" href="/static/css/style-new.css">
-            <link rel="stylesheet" href="/static/css/style-beautiful.css">
-        </head>
-        <body>
-            <!-- UI elements -->
-        </body>
-        </html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🤖 Voice Controlled Robot - AI Interface</title>
+    <title>🤖 Voice Controlled Robot AI</title>
     
-    <!-- Font Awesome for icons -->
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Your CSS Files -->
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/style-new.css">
-    <link rel="stylesheet" href="/static/css/style-beautiful.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --gray: #64748b;
+            --light: #f8fafc;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+        
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3), transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.3), transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(139, 92, 246, 0.3), transparent 50%);
+            animation: gradientShift 15s ease infinite;
+            z-index: -1;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease;
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .status-badge:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-badge.connected .status-dot {
+            background: var(--secondary);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        /* Glass Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .card-title i {
+            font-size: 1.75rem;
+            color: var(--secondary);
+        }
+        
+        /* Microphone Section */
+        .mic-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            padding: 2rem 0;
+        }
+        
+        .mic-button {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+        }
+        
+        .mic-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 50px rgba(102, 126, 234, 0.6);
+        }
+        
+        .mic-button:active {
+            transform: scale(0.95);
+        }
+        
+        .mic-button i {
+            font-size: 4rem;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .mic-button.recording {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            animation: recordPulse 1.5s infinite;
+        }
+        
+        .mic-button.recording i {
+            animation: shake 0.5s infinite;
+        }
+        
+        @keyframes recordPulse {
+            0%, 100% {
+                box-shadow: 0 10px 40px rgba(239, 68, 68, 0.4);
+            }
+            50% {
+                box-shadow: 0 10px 60px rgba(239, 68, 68, 0.8);
+            }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+        }
+        
+        .mic-status {
+            font-size: 1.1rem;
+            font-weight: 500;
+            text-align: center;
+            min-height: 2rem;
+        }
+        
+        /* Result Display */
+        .result-grid {
+            display: grid;
+            gap: 1rem;
+        }
+        
+        .result-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .result-label {
+            display: block;
+            font-size: 0.875rem;
+            opacity: 0.7;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .result-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            word-break: break-word;
+        }
+        
+        /* Command Chips */
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+        
+        .command-chip {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .command-chip:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+        
+        .command-chip:active {
+            transform: translateY(0);
+        }
+        
+        .command-chip i {
+            font-size: 2rem;
+            color: var(--secondary);
+        }
+        
+        .command-chip span {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        /* History */
+        .history-list {
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .history-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 12px;
+            border-left: 3px solid var(--secondary);
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .history-command {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .history-response {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+        
+        .history-time {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            margin-top: 0.5rem;
+        }
+        
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: rgba(255, 255, 255, 0.95);
+            color: var(--dark);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.success {
+            border-left: 4px solid var(--secondary);
+        }
+        
+        .notification.error {
+            border-left: 4px solid var(--danger);
+        }
+        
+        .notification.warning {
+            border-left: 4px solid var(--warning);
+        }
+        
+        /* Animations */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* Responsive */
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+            
+            .mic-button {
+                width: 140px;
+                height: 140px;
+            }
+            
+            .mic-button i {
+                font-size: 3rem;
+            }
+        }
+    </style>
 </head>
 <body>
-    <!-- Connection Status -->
-    <div class="connection-status disconnected" id="connectionStatus">
-        <span class="status-dot disconnected" id="statusDot"></span>
-        <span id="connectionText">Checking connection...</span>
-    </div>
-
     <div class="container">
         <!-- Header -->
         <header>
-            <h1>🤖 Voice Controlled Robot</h1>
-            <p class="subtitle">Tekan tombol mikrofon dan ucapkan perintah Anda</p>
-            <div class="status disconnected" id="arduinoStatus">
-                <span class="dot"></span>
-                <span id="statusText">Checking Arduino...</span>
+            <h1>🤖 Voice Controlled Robot AI</h1>
+            <p class="subtitle">Click the microphone and speak your command</p>
+            <div class="status-badge" id="statusBadge">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Checking connection...</span>
             </div>
         </header>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Left Column: Microphone & Results -->
-            <div class="command-section">
-                <!-- Microphone Section -->
-                <div class="mic-section">
-                    <button class="mic-button" id="micButton" aria-label="Microphone">
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left: Voice Control -->
+            <div class="glass-card">
+                <h2 class="card-title">
+                    <i class="fas fa-microphone-alt"></i>
+                    Voice Control
+                </h2>
+                
+                <div class="mic-container">
+                    <button class="mic-button" id="micButton">
                         <i class="fas fa-microphone" id="micIcon"></i>
-                        <div class="pulse-ring"></div>
-                        <span class="mic-tooltip">Klik untuk mulai merekam</span>
                     </button>
-                    <div class="mic-status" id="micStatus">Klik mikrofon untuk memulai</div>
+                    <div class="mic-status" id="micStatus">Click to start recording</div>
                 </div>
-
-                <!-- Result Box -->
-                <div class="card result-box">
-                    <h2><i class="fas fa-chart-line"></i> Hasil Perintah</h2>
+                
+                <div class="result-grid">
                     <div class="result-item">
-                        <span class="result-label">📝 Teks Terdeteksi:</span>
-                        <span class="command-text" id="recognizedText">-</span>
+                        <span class="result-label">📝 Detected Text</span>
+                        <div class="result-value" id="recognizedText">-</div>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">⚙️ Perintah Arduino:</span>
-                        <span class="command-text" id="arduinoCommand">-</span>
+                        <span class="result-label">⚙️ Arduino Command</span>
+                        <div class="result-value" id="arduinoCommand">-</div>
                     </div>
                     <div class="result-item">
-                        <span class="result-label">✅ Respon Robot:</span>
-                        <span class="response-text" id="robotResponse">-</span>
+                        <span class="result-label">✅ Robot Response</span>
+                        <div class="result-value" id="robotResponse">-</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Suggestions & History -->
-            <div class="suggestions-section">
-                <h2><i class="fas fa-lightbulb"></i> Contoh Perintah</h2>
+            <!-- Right: Commands & History -->
+            <div class="glass-card">
+                <h2 class="card-title">
+                    <i class="fas fa-bolt"></i>
+                    Quick Commands
+                </h2>
                 
-                <div class="suggestions-grid">
-                    <div class="suggestion-chip" data-command="nyala">
+                <div class="command-grid">
+                    <div class="command-chip" data-command="turn on the light">
                         <i class="fas fa-lightbulb"></i>
-                        <span>Nyalakan lampu</span>
+                        <span>Light ON</span>
                     </div>
-                    <div class="suggestion-chip" data-command="matikan">
+                    <div class="command-chip" data-command="turn off the light">
                         <i class="fas fa-power-off"></i>
-                        <span>Matikan lampu</span>
+                        <span>Light OFF</span>
                     </div>
-                    <div class="suggestion-chip" data-command="maju">
+                    <div class="command-chip" data-command="forward">
                         <i class="fas fa-arrow-up"></i>
-                        <span>Maju</span>
+                        <span>Forward</span>
                     </div>
-                    <div class="suggestion-chip" data-command="mundur">
+                    <div class="command-chip" data-command="backward">
                         <i class="fas fa-arrow-down"></i>
-                        <span>Mundur</span>
+                        <span>Backward</span>
                     </div>
-                    <div class="suggestion-chip" data-command="kiri">
+                    <div class="command-chip" data-command="left">
                         <i class="fas fa-arrow-left"></i>
-                        <span>Belok kiri</span>
+                        <span>Turn Left</span>
                     </div>
-                    <div class="suggestion-chip" data-command="kanan">
+                    <div class="command-chip" data-command="right">
                         <i class="fas fa-arrow-right"></i>
-                        <span>Belok kanan</span>
+                        <span>Turn Right</span>
                     </div>
-                    <div class="suggestion-chip" data-command="berhenti">
-                        <i class="fas fa-stop"></i>
-                        <span>Berhenti</span>
+                    <div class="command-chip" data-command="stop">
+                        <i class="fas fa-hand-paper"></i>
+                        <span>Stop</span>
                     </div>
-                    <div class="suggestion-chip" data-command="alarm">
+                    <div class="command-chip" data-command="alarm">
                         <i class="fas fa-bell"></i>
-                        <span>Aktifkan alarm</span>
-                    </div>
-                </div>
-
-                <!-- Command History -->
-                <div class="history-section">
-                    <h3><i class="fas fa-history"></i> Riwayat Perintah</h3>
-                    <div class="history-list" id="historyList">
-                        <p style="text-align: center; color: var(--gray-400); padding: 1rem;">
-                            Belum ada riwayat perintah
-                        </p>
+                        <span>Alarm</span>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- History Section -->
+        <div class="glass-card">
+            <h2 class="card-title">
+                <i class="fas fa-history"></i>
+                Command History
+            </h2>
+            <div class="history-list" id="historyList">
+                <p style="text-align: center; opacity: 0.6; padding: 2rem;">
+                    No commands yet. Start by clicking the microphone!
+                </p>
+            </div>
+        </div>
     </div>
 
-    <!-- Notification Toast -->
+    <!-- Notification -->
     <div class="notification" id="notification">
         <i class="fas fa-info-circle"></i>
         <span id="notificationText">Notification</span>
@@ -148,10 +564,8 @@
         const arduinoCommand = document.getElementById('arduinoCommand');
         const robotResponse = document.getElementById('robotResponse');
         const historyList = document.getElementById('historyList');
-        const connectionStatus = document.getElementById('connectionStatus');
+        const statusBadge = document.getElementById('statusBadge');
         const statusDot = document.getElementById('statusDot');
-        const connectionText = document.getElementById('connectionText');
-        const arduinoStatus = document.getElementById('arduinoStatus');
         const statusText = document.getElementById('statusText');
         const notification = document.getElementById('notification');
         const notificationText = document.getElementById('notificationText');
@@ -167,29 +581,15 @@
                 const data = await response.json();
                 
                 if (data.connected) {
-                    connectionStatus.classList.remove('disconnected');
-                    connectionStatus.classList.add('connected');
-                    statusDot.classList.remove('disconnected');
-                    statusDot.classList.add('connected');
-                    connectionText.textContent = `✅ ${data.message}`;
-                    
-                    arduinoStatus.classList.remove('disconnected');
-                    arduinoStatus.classList.add('connected');
-                    statusText.textContent = `Terhubung: ${data.port}`;
+                    statusBadge.classList.add('connected');
+                    statusText.textContent = `✅ Connected: ${data.port}`;
                 } else {
-                    connectionStatus.classList.remove('connected');
-                    connectionStatus.classList.add('disconnected');
-                    statusDot.classList.remove('connected');
-                    statusDot.classList.add('disconnected');
-                    connectionText.textContent = `⚠️ Mode Simulasi`;
-                    
-                    arduinoStatus.classList.remove('connected');
-                    arduinoStatus.classList.add('disconnected');
-                    statusText.textContent = 'Mode Simulasi - Arduino tidak terhubung';
+                    statusBadge.classList.remove('connected');
+                    statusText.textContent = `⚠️ Simulation Mode`;
                 }
             } catch (error) {
                 console.error('Connection check error:', error);
-                connectionText.textContent = '❌ Error koneksi';
+                statusText.textContent = '❌ Connection Error';
             }
         }
 
@@ -314,14 +714,14 @@
             }
         }
 
-        // Suggestion chip click
-        document.querySelectorAll('.suggestion-chip').forEach(chip => {
+        // Command chip click
+        document.querySelectorAll('.command-chip').forEach(chip => {
             chip.addEventListener('click', function() {
                 const command = this.dataset.command;
                 
                 // Visual feedback
-                this.classList.add('pressed');
-                setTimeout(() => this.classList.remove('pressed'), 200);
+                this.style.transform = 'scale(0.95)';
+                setTimeout(() => this.style.transform = '', 200);
                 
                 // Simulate voice command
                 processTextCommand(command);

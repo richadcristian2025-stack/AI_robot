@@ -1,23 +1,16 @@
 """
-web_interface.py - Voice Controlled Robot Web Interface
-Integrates with AI command processing from stt_ai.py
-Run: python web_interface.py
-Access: http://localhost:4141
+web_interface.py - Voice Controlled Robot Web Interface (FIXED)
 """
 
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import os
-import tempfile
-import json
 import time
 import traceback
 import io
 import wave
 from datetime import datetime
 import numpy as np
-
-# Import AI components from stt_ai.py
 import torch
 import torch.nn.functional as F
 from transformers import (
@@ -30,8 +23,33 @@ import serial
 import serial.tools.list_ports
 from typing import Optional
 
+# Import ML AI module
+from ml_ai import MLRobotAI
+
 # ============================================================
-# ROBOT CONTROLLER (from stt_ai.py)
+# CONFIGURATION
+# ============================================================
+class Config:
+    # Serial settings
+    SERIAL_PORT = os.getenv('SERIAL_PORT', 'COM3')  # Use env variable
+    BAUD_RATE = 9600
+    SERIAL_TIMEOUT = 2
+    
+    # Model settings
+    WHISPER_MODEL = "openai/whisper-tiny"
+    INTENT_MODEL = "microsoft/xtremedistil-l6-h256-uncased"
+    
+    # Server settings
+    HOST = '0.0.0.0'
+    PORT = 4141
+    DEBUG = True
+    
+    # Limits
+    MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_HISTORY = 10
+
+# ============================================================
+# ROBOT CONTROLLER
 # ============================================================
 class RobotController:
     def __init__(self, port: Optional[str], baud_rate: int):
@@ -44,7 +62,6 @@ class RobotController:
         if port:
             self.connect(port)
         else:
-            # Try auto-detect
             detected_port = self._auto_detect_arduino()
             if detected_port:
                 self.connect(detected_port)
@@ -67,9 +84,14 @@ class RobotController:
         return None
 
     def connect(self, port: str) -> bool:
+        """Connect to Arduino"""
         try:
-            self.arduino = serial.Serial(port, self.baud_rate, timeout=2)
-            time.sleep(2)
+            self.arduino = serial.Serial(
+                port, 
+                self.baud_rate, 
+                timeout=Config.SERIAL_TIMEOUT
+            )
+            time.sleep(2)  # Wait for Arduino to initialize
             self.connected = True
             self.port = port
             self.error = None
@@ -82,57 +104,72 @@ class RobotController:
             return False
 
     def send_command(self, command: str) -> str:
+        """Send command to Arduino"""
         if not command:
             return "EMPTY_COMMAND"
+        
         if not self.connected:
             print(f"[SIMULATION] Command => {command}")
             return f"[SIMULASI] Perintah diterima: {command}"
+        
         try:
             self.arduino.write((command + "\n").encode())
             time.sleep(0.05)
-            resp = self.arduino.readline().decode(errors="ignore").strip()
-            return resp if resp else "OK"
+            response = self.arduino.readline().decode(errors="ignore").strip()
+            return response if response else "OK"
         except Exception as e:
             self.connected = False
             self.error = str(e)
-            print("⚠️ Serial write/read error:", e)
+            print(f"⚠️ Serial error: {e}")
             return "ERROR"
 
+    def disconnect(self):
+        """Disconnect from Arduino"""
+        if self.arduino:
+            try:
+                self.arduino.close()
+                self.connected = False
+                print("✅ Arduino disconnected")
+            except Exception as e:
+                print(f"⚠️ Disconnect error: {e}")
+
 # ============================================================
-# SPEECH-TO-TEXT (Whisper from Hugging Face)
+# SPEECH-TO-TEXT (Whisper)
 # ============================================================
 class SpeechToText:
-    def __init__(self, model_name="openai/whisper-tiny"):
+    def __init__(self, model_name=None):
+        model_name = model_name or Config.WHISPER_MODEL
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🧠 Loading Whisper model ({model_name}) on {self.device}...")
+        
         try:
             self.processor = WhisperProcessor.from_pretrained(model_name)
             self.model = WhisperForConditionalGeneration.from_pretrained(model_name).to(self.device)
+            
             try:
                 self.model.config.forced_decoder_ids = None
             except Exception:
                 pass
+            
             print("✅ Whisper model loaded successfully")
         except Exception as e:
-            print("❌ Failed to load Whisper model:", e)
+            print(f"❌ Failed to load Whisper model: {e}")
             raise
 
     def _read_wav_from_bytes(self, wav_bytes: bytes):
         """Parse WAV bytes and return (numpy_array, sample_rate)"""
         try:
             bio = io.BytesIO(wav_bytes)
-            wf = wave.open(bio, "rb")
-            sr = wf.getframerate()
-            frames = wf.readframes(wf.getnframes())
-            sampwidth = wf.getsampwidth()
+            with wave.open(bio, "rb") as wf:
+                sr = wf.getframerate()
+                frames = wf.readframes(wf.getnframes())
+                sampwidth = wf.getsampwidth()
+                channels = wf.getnchannels()
             
-            if sampwidth == 2:
-                dtype = np.int16
-            elif sampwidth == 4:
-                dtype = np.int32
-            else:
-                dtype = np.int16
+            # Determine dtype
+            dtype = np.int16 if sampwidth == 2 else (np.int32 if sampwidth == 4 else np.int16)
             
+            # Convert to float32
             audio = np.frombuffer(frames, dtype=dtype).astype(np.float32)
             
             # Normalize
@@ -142,17 +179,24 @@ class SpeechToText:
                 audio = audio / (2**31)
             
             # Convert stereo to mono
-            if wf.getnchannels() == 2:
+            if channels == 2:
                 audio = audio.reshape(-1, 2).mean(axis=1)
             
             return audio, sr
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ WAV parsing error: {e}")
             return None, None
 
     def process_audio(self, audio_bytes: bytes) -> str:
         """Process audio bytes and return transcribed text"""
         if not audio_bytes:
             return ""
+        
+        # Check size limit
+        if len(audio_bytes) > Config.MAX_AUDIO_SIZE:
+            print(f"⚠️ Audio too large: {len(audio_bytes)} bytes")
+            return ""
+        
         try:
             # Try to read as WAV
             audio, sr = self._read_wav_from_bytes(audio_bytes)
@@ -163,7 +207,7 @@ class SpeechToText:
                     audio = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
                     sr = 16000
                 except Exception as e:
-                    print("❌ Can't interpret audio bytes:", e)
+                    print(f"❌ Can't interpret audio bytes: {e}")
                     return ""
             
             # Ensure 1D float32
@@ -175,57 +219,81 @@ class SpeechToText:
             inputs = self.processor(audio, sampling_rate=sr, return_tensors="pt")
             input_features = inputs.input_features.to(self.device)
             
-            predicted_ids = self.model.generate(input_features, max_new_tokens=512)
+            with torch.no_grad():
+                predicted_ids = self.model.generate(input_features, max_new_tokens=512)
+            
             text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
             
             print(f"🎙️ Transcribed: {text}")
             return text
+            
         except Exception as e:
-            print("❌ Error in process_audio:", e)
+            print(f"❌ Error in process_audio: {e}")
             traceback.print_exc()
             return ""
 
 # ============================================================
-# VOICE AI - Command Processing
+# VOICE AI - Command Processing using ML
 # ============================================================
 class VoiceAI:
-    def __init__(self, use_intent_model: bool = True):
-        self.use_intent_model = use_intent_model
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # Load intent model (optional)
-        self.intent_tokenizer = None
-        self.intent_model = None
+    def __init__(self, use_ml_model: bool = True):
+        self.use_ml_model = use_ml_model
+        self.ml_ai = None
         
-        if self.use_intent_model:
+        if self.use_ml_model:
             try:
-                intent_model_name = "microsoft/xtremedistil-l6-h256-uncased"
-                print(f"🧠 Loading intent model ({intent_model_name}) on {self.device}...")
-                self.intent_tokenizer = AutoTokenizer.from_pretrained(intent_model_name)
-                self.intent_model = AutoModelForSequenceClassification.from_pretrained(intent_model_name).to(self.device)
-                self.intent_model.eval()
-                print("✅ Intent model loaded")
+                print("🧠 Initializing ML AI model...")
+                self.ml_ai = MLRobotAI()
+                
+                # Try to load existing model, otherwise train
+                if not self.ml_ai.load_model('robot_ml_model.pkl'):
+                    print("📚 Training new ML model...")
+                    self.ml_ai.train(save_model=True)
+                
+                print("✅ ML AI model ready")
             except Exception as e:
-                print("⚠️ Failed to load intent model, using keyword mapping only:", e)
-                self.intent_tokenizer = None
-                self.intent_model = None
-
-        # Command mapping
+                print(f"⚠️ ML model failed, using fallback: {e}")
+                self.ml_ai = None
+        
+        # Fallback command mapping (if ML fails)
         self.command_mapping = {
+            # Lights
             "nyala": "L13:1:5",
             "hidup": "L13:1:5",
+            "light on": "L13:1:5",
+            "turn on": "L13:1:5",
             "matikan": "L13:0:0",
             "mati": "L13:0:0",
+            "padamkan": "L13:0:0",
+            "light off": "L13:0:0",
+            "turn off": "L13:0:0",
+            
+            # Sensors
             "suhu": "TR",
+            "temperature": "TR",
             "kelembaban": "HR",
+            "humidity": "HR",
+            
+            # Movement
             "maju": "MF:90:1",
+            "forward": "MF:90:1",
             "mundur": "MB:90:1",
+            "backward": "MB:90:1",
             "kiri": "ML:90:1",
+            "left": "ML:90:1",
             "kanan": "MR:90:1",
+            "right": "MR:90:1",
+            
+            # Control
             "berhenti": "MS:0:0",
             "stop": "MS:0:0",
+            "diam": "MS:0:0",
+            
+            # Sound
             "alarm": "S1000:1;S2000:1;S1000:1",
+            "sirine": "S1000:1;S2000:1;S1000:1",
             "bel": "S2000:1",
+            "bunyi": "S2000:1",
         }
 
     def process_command(self, text: str) -> Optional[str]:
@@ -236,13 +304,24 @@ class VoiceAI:
         txt = text.lower().strip()
         print(f"[AI] Processing: {txt}")
         
-        # 1) Keyword matching first
+        # 1) Try ML model first
+        if self.ml_ai:
+            try:
+                command = self.ml_ai.process_command(txt, threshold=0.3, verbose=True)
+                if command:
+                    print(f"[ML AI] Command found: {command}")
+                    return command
+            except Exception as e:
+                print(f"[ML AI] Error: {e}")
+        
+        # 2) Fallback to keyword matching
+        print("[AI] Using fallback keyword matching...")
         for keyword, cmd in self.command_mapping.items():
             if keyword in txt:
                 print(f"[AI] Matched keyword: {keyword} -> {cmd}")
                 return cmd
         
-        # 2) Handle sound frequency commands
+        # 3) Handle sound frequency commands
         import re
         if any(word in txt for word in ["suara", "nada", "bunyi", "frekuensi"]):
             numbers = re.findall(r'\d+', txt)
@@ -254,49 +333,26 @@ class VoiceAI:
                 print(f"[AI] Sound frequency: {freq}Hz -> {cmd}")
                 return cmd
         
-        # 3) Intent model fallback
-        if self.intent_model and self.intent_tokenizer:
-            try:
-                inputs = self.intent_tokenizer(
-                    txt,
-                    return_tensors="pt",
-                    truncation=True,
-                    padding=True,
-                    max_length=128
-                )
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                
-                with torch.no_grad():
-                    outputs = self.intent_model(**inputs)
-                    probs = F.softmax(outputs.logits, dim=1)
-                    cls = torch.argmax(probs, dim=1).item()
-                    conf = probs[0][cls].item()
-                
-                label = str(cls)
-                if hasattr(self.intent_model.config, 'id2label'):
-                    label = self.intent_model.config.id2label.get(str(cls), str(cls))
-                
-                print(f"[AI] Intent model: {label} (conf: {conf:.2f})")
-            except Exception as e:
-                print(f"[AI] Intent model error: {e}")
-        
         print("[AI] No command matched")
         return None
 
 # ============================================================
 # FLASK APP
 # ============================================================
-app = Flask(__name__, static_folder='static')
-CORS(app)
+app = Flask(__name__, static_folder='static', template_folder='templates')
+CORS(app, resources={
+    r"/api/*": {"origins": "*"},  # Allow all origins for API
+    r"/static/*": {"origins": "*"}  # Allow all origins for static files
+})
 
 # Initialize components
 print("=" * 60)
 print("🤖 Initializing Voice Controlled Robot System...")
 print("=" * 60)
 
-robot = RobotController(port="COM3", baud_rate=9600)
-stt = SpeechToText(model_name="openai/whisper-tiny")
-ai = VoiceAI(use_intent_model=True)
+robot = RobotController(port=Config.SERIAL_PORT, baud_rate=Config.BAUD_RATE)
+stt = SpeechToText()
+ai = VoiceAI(use_ml_model=True)  # Use ML model from ml_ai.py
 
 # Global variables
 last_result = {
@@ -333,7 +389,7 @@ def process_audio():
         return jsonify({"error": "Empty audio file"}), 400
     
     try:
-        # Step 1: Transcribe audio using Whisper
+        # Step 1: Transcribe audio
         print("\n" + "="*50)
         print("🎤 Processing new audio...")
         text = stt.process_audio(audio_bytes)
@@ -348,7 +404,7 @@ def process_audio():
             }
             return jsonify(last_result)
         
-        # Step 2: Process command with AI
+        # Step 2: Process command
         command = ai.process_command(text)
         
         # Step 3: Send to robot
@@ -371,7 +427,7 @@ def process_audio():
         
         # Add to history
         command_history.append(last_result.copy())
-        if len(command_history) > 10:
+        if len(command_history) > Config.MAX_HISTORY:
             command_history.pop(0)
         
         print(f"✅ Result: {last_result}")
@@ -387,13 +443,13 @@ def process_audio():
 
 @app.route('/api/status')
 def get_status():
-    """Get the current status of the system"""
+    """Get system status"""
     return jsonify({
         "status": "ok",
         "is_connected": robot.connected,
         "port": robot.port,
         "last_command": last_result,
-        "model": "whisper-tiny",
+        "model": Config.WHISPER_MODEL,
         "error": robot.error
     })
 
@@ -402,27 +458,56 @@ def get_history():
     """Get command history"""
     return jsonify({
         "status": "ok",
-        "history": command_history[-10:]
+        "history": list(reversed(command_history[-Config.MAX_HISTORY:]))
     })
 
 @app.route('/api/check-connection')
 def check_connection():
-    """Check if Arduino is connected"""
+    """Check Arduino connection"""
     return jsonify({
         "connected": robot.connected,
         "port": robot.port,
-        "message": f"Arduino connected on {robot.port}" if robot.connected else "Arduino not connected - Running in simulation mode",
+        "message": f"Arduino connected on {robot.port}" if robot.connected 
+                  else "Arduino not connected - Running in simulation mode",
         "error": robot.error
     })
 
-# Serve static files
 @app.route('/static/<path:path>')
 def serve_static(path):
+    """Serve static files"""
     return send_from_directory('static', path)
+
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
+
+@app.errorhandler(404)
+def not_found(e):
+    """Handle 404 errors"""
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    """Handle 500 errors"""
+    return jsonify({"error": "Internal server error"}), 500
+
+# ============================================================
+# CLEANUP
+# ============================================================
+
+def cleanup():
+    """Cleanup resources on shutdown"""
+    print("\n🛑 Shutting down...")
+    robot.disconnect()
+    print("✅ Cleanup complete")
+
+import atexit
+atexit.register(cleanup)
 
 # ============================================================
 # MAIN
 # ============================================================
+
 if __name__ == '__main__':
     # Create necessary directories
     os.makedirs('templates', exist_ok=True)
@@ -432,8 +517,19 @@ if __name__ == '__main__':
     
     print("\n" + "="*60)
     print("🌐 Starting web server...")
-    print(f"📡 Access the interface at: http://localhost:4141")
+    print(f"📡 Access: http://localhost:{Config.PORT}")
+    print(f"🔌 Arduino: {'Connected' if robot.connected else 'Simulation Mode'}")
+    print(f"🧠 Model: {Config.WHISPER_MODEL}")
     print("="*60 + "\n")
     
-    # Start the web server
-    app.run(host='0.0.0.0', port=4141, debug=True, threaded=True)
+    # Start server
+    try:
+        app.run(
+            host=Config.HOST, 
+            port=Config.PORT, 
+            debug=Config.DEBUG, 
+            threaded=True
+        )
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
+        cleanup()

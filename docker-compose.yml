@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  robot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    ports:
+      - "4141:4141"
+    volumes:
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./config:/app/config
+      # Mount only specific directories needed for development
+      - ./web_interface.py:/app/web_interface.py
+      - ./requirements.txt:/app/requirements.txt
+    environment:
+      - NODE_ENV=production
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+      - SERIAL_PORT=/dev/ttyACM0
+    restart: unless-stopped
+    privileged: true
+    container_name: robot-app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:4141/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

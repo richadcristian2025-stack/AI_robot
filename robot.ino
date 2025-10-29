@@ -3,8 +3,11 @@
 #include <DFRobot_DHT11.h>
 #include <Wire.h>
 
-// === PIN DEFINITIONS ===
-// OUTPUT PINS
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+// Pin Definitions
 #define LED_RED    13
 #define LED_YELLOW 12
 #define LED_GREEN  11
@@ -12,23 +15,58 @@
 #define LED_WHITE  9
 #define BUZZER     8
 #define SERVO_PIN  7
-
-// INPUT PINS
 #define POT_PIN    A0
 #define DHT_PIN    2
 
-// === Objects ===
+// Timing Constants
+#define BLINK_DELAY 250
+#define SHORT_DELAY 500
+#define LONG_DELAY 1000
+#define LCD_DISPLAY_TIME 3000
+
+// Limits
+#define MAX_INPUT_LENGTH 100
+#define MIN_LED_PIN 9
+#define MAX_LED_PIN 13
+#define MIN_FREQUENCY 20
+#define MAX_FREQUENCY 20000
+#define MIN_TEMP -40
+#define MAX_TEMP 80
+#define MIN_HUMIDITY 0
+#define MAX_HUMIDITY 100
+
+// ============================================================
+// GLOBAL OBJECTS
+// ============================================================
+
 Servo myServo;
 LCD_I2C lcd(0x27, 16, 2);
 DFRobot_DHT11 DHT;
 
-// === Variables ===
-String inputString = "";
-bool stringComplete = false;
-int potVal = 0;
+// ============================================================
+// GLOBAL VARIABLES
+// ============================================================
+
+char inputBuffer[MAX_INPUT_LENGTH + 1];
+uint8_t inputIndex = 0;
+bool commandReady = false;
+
+// Non-blocking timing
+unsigned long lastLCDUpdate = 0;
+bool lcdNeedsClear = false;
+
+// Error tracking
+uint8_t errorCount = 0;
+#define MAX_ERRORS 10
+
+// ============================================================
+// SETUP
+// ============================================================
 
 void setup() {
+  // Serial Communication
   Serial.begin(9600);
+  while (!Serial && millis() < 3000);  // Wait up to 3 seconds
   
   // LED Setup
   pinMode(LED_RED, OUTPUT);
@@ -37,176 +75,206 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_WHITE, OUTPUT);
   
+  // Initialize all LEDs OFF
+  digitalWrite(LED_RED, LOW);
+  digitalWrite(LED_YELLOW, LOW);
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_BLUE, LOW);
+  digitalWrite(LED_WHITE, LOW);
+  
   // Buzzer Setup
   pinMode(BUZZER, OUTPUT);
+  noTone(BUZZER);
   
   // Servo Setup
   myServo.attach(SERVO_PIN);
-  myServo.write(90);   // Posisi netral
+  myServo.write(90);  // Neutral position
   
-  // Potentiometer (analog input tidak perlu pinMode)
-  // pinMode(POT_PIN, INPUT); // Opsional, default sudah INPUT
-  
-  // DHT11 Sensor (handled by library)
-  // pinMode(DHT_PIN, INPUT); // Library akan mengatur ini
-  
-  // LCD Setup (I2C pins A4/A5 diatur otomatis oleh Wire.h)
+  // LCD Setup
   lcd.begin();
   lcd.display();
   lcd.backlight();
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("AI Robot Ready!");
+  lcd.print("AI Robot v2.0");
+  lcd.setCursor(0, 1);
+  lcd.print("Ready!");
   
-  inputString.reserve(100);
+  // Startup tone
+  tone(BUZZER, 1000, 100);
+  delay(150);
+  tone(BUZZER, 1500, 100);
   
-  delay(1000);
+  delay(2000);
   lcd.clear();
-  Serial.println("Arduino Ready!");
+  
+  Serial.println("READY");
+  Serial.flush();
 }
 
+// ============================================================
+// MAIN LOOP
+// ============================================================
+
 void loop() {
-  // Baca potensio untuk kontrol servo manual (opsional)
-  potVal = analogRead(POT_PIN);
-  potVal = map(potVal, 0, 1023, 0, 180);
+  // Handle LCD auto-clear
+  if (lcdNeedsClear && (millis() - lastLCDUpdate > LCD_DISPLAY_TIME)) {
+    lcd.clear();
+    lcdNeedsClear = false;
+  }
   
-  if (stringComplete) {
-    processCommand(inputString);
-    inputString = "";
-    stringComplete = false;
+  // Process commands
+  if (commandReady) {
+    processCommand(inputBuffer);
+    
+    // Clear buffer
+    inputIndex = 0;
+    inputBuffer[0] = '\0';
+    commandReady = false;
+  }
+  
+  // Check for errors
+  if (errorCount >= MAX_ERRORS) {
+    handleCriticalError();
   }
 }
+
+// ============================================================
+// SERIAL EVENT (Non-blocking input)
+// ============================================================
 
 void serialEvent() {
   while (Serial.available()) {
     char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      stringComplete = true;
-    } else {
-      inputString += inChar;
+    
+    if (inChar == '\n' || inChar == '\r') {
+      if (inputIndex > 0) {
+        inputBuffer[inputIndex] = '\0';
+        commandReady = true;
+      }
+    } 
+    else if (inputIndex < MAX_INPUT_LENGTH) {
+      inputBuffer[inputIndex++] = inChar;
+    } 
+    else {
+      // Buffer overflow - clear and report error
+      inputIndex = 0;
+      Serial.println("ERROR: Command too long");
+      errorCount++;
     }
   }
 }
 
-void processCommand(String cmd) {
-  cmd.trim();
-  
-  if (cmd.startsWith("L")) {
-    handleLED(cmd);
-  }
-  else if (cmd.startsWith("S")) {
-    handleSpeaker(cmd);
-  }
-  else if (cmd.startsWith("M")) {
-    handleServo(cmd);
-  }
-  else if (cmd.startsWith("TR")) {
-    handleTemperature();
-  }
-  else if (cmd.startsWith("HR")) {
-    handleHumidity();
-  }
-  else if (cmd.startsWith("D:")) {
-    handleLCD(cmd);
-  }
-  else {
-    Serial.println("ERROR: Unknown command");
-  }
-}
+// ============================================================
+// COMMAND PROCESSING
+// ============================================================
 
-// ============================================================================
-// LED HANDLER dengan DURATION SUPPORT
-// ============================================================================
-
-void handleLED(String cmd) {
-  // Format: L13:1:5 (LED pin 13, ON, 5 detik)
-  //         LA:2:3 (ALL LEDs, BLINK, 3 detik)
+void processCommand(char* cmd) {
+  // Trim whitespace
+  while (*cmd == ' ') cmd++;
   
-  int colon1 = cmd.indexOf(':');
-  int colon2 = cmd.indexOf(':', colon1 + 1);
-  
-  String pinStr = cmd.substring(1, colon1);
-  int state = cmd.substring(colon1 + 1, colon2).toInt();
-  int duration = 0;
-  
-  if (colon2 != -1) {
-    duration = cmd.substring(colon2 + 1).toInt();
-  }
-  
-  // ALL LEDs
-  if (pinStr == "A") {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("All LEDs ");
-    lcd.print(state == 1 ? "ON" : state == 2 ? "BLINK" : "OFF");
-    
-    if (state == 0) {
-      digitalWrite(LED_RED, LOW);
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_GREEN, LOW);
-      digitalWrite(LED_BLUE, LOW);
-      digitalWrite(LED_WHITE, LOW);
-    } 
-    else if (state == 1) {
-      digitalWrite(LED_RED, HIGH);
-      digitalWrite(LED_YELLOW, HIGH);
-      digitalWrite(LED_GREEN, HIGH);
-      digitalWrite(LED_BLUE, HIGH);
-      digitalWrite(LED_WHITE, HIGH);
-      
-      if (duration > 0) {
-        delay(duration * 1000);
-        digitalWrite(LED_RED, LOW);
-        digitalWrite(LED_YELLOW, LOW);
-        digitalWrite(LED_GREEN, LOW);
-        digitalWrite(LED_BLUE, LOW);
-        digitalWrite(LED_WHITE, LOW);
-      }
-    } 
-    else if (state == 2) {
-      // Blink all
-      int times = duration > 0 ? duration * 2 : 10;
-      for (int i = 0; i < times; i++) {
-        digitalWrite(LED_RED, HIGH);
-        digitalWrite(LED_YELLOW, HIGH);
-        digitalWrite(LED_GREEN, HIGH);
-        digitalWrite(LED_BLUE, HIGH);
-        digitalWrite(LED_WHITE, HIGH);
-        delay(250);
-        digitalWrite(LED_RED, LOW);
-        digitalWrite(LED_YELLOW, LOW);
-        digitalWrite(LED_GREEN, LOW);
-        digitalWrite(LED_BLUE, LOW);
-        digitalWrite(LED_WHITE, LOW);
-        delay(250);
-      }
-    }
-    
-    Serial.println("OK: All LEDs controlled");
-    lcd.clear();
+  if (strlen(cmd) == 0) {
     return;
   }
   
-  // Single LED
-  int pin = pinStr.toInt();
+  // Route command
+  switch (cmd[0]) {
+    case 'L':  // LED control
+      handleLED(cmd);
+      break;
+    case 'S':  // Speaker/Sound
+      handleSpeaker(cmd);
+      break;
+    case 'M':  // Motor/Servo
+      handleServo(cmd);
+      break;
+    case 'T':  // Temperature
+      if (cmd[1] == 'R') handleTemperature();
+      else sendError("Unknown command");
+      break;
+    case 'H':  // Humidity
+      if (cmd[1] == 'R') handleHumidity();
+      else sendError("Unknown command");
+      break;
+    case 'D':  // Display (LCD)
+      handleLCD(cmd);
+      break;
+    case 'P':  // Ping (heartbeat)
+      Serial.println("PONG");
+      break;
+    default:
+      sendError("Unknown command");
+      break;
+  }
+}
+
+// ============================================================
+// LED HANDLER
+// ============================================================
+
+void handleLED(char* cmd) {
+  // Format: L13:1:5 (pin 13, ON, 5 seconds)
+  //         LA:2:3  (ALL, BLINK, 3 seconds)
   
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("LED Pin ");
-  lcd.print(pin);
-  lcd.setCursor(0, 1);
-  lcd.print(state == 1 ? "ON" : state == 2 ? "BLINK" : "OFF");
-  
-  if (duration > 0) {
-    lcd.print(" ");
-    lcd.print(duration);
-    lcd.print("s");
+  char* token = strtok(cmd + 1, ":");
+  if (!token) {
+    sendError("Invalid LED command format");
+    return;
   }
   
+  // Parse pin/mode
+  bool allLEDs = (token[0] == 'A');
+  int pin = allLEDs ? 0 : atoi(token);
+  
+  // Validate pin
+  if (!allLEDs && (pin < MIN_LED_PIN || pin > MAX_LED_PIN)) {
+    sendError("Invalid LED pin");
+    return;
+  }
+  
+  // Parse state
+  token = strtok(NULL, ":");
+  if (!token) {
+    sendError("Missing LED state");
+    return;
+  }
+  int state = atoi(token);
+  
+  // Parse duration (optional)
+  token = strtok(NULL, ":");
+  int duration = token ? atoi(token) : 0;
+  
+  // Update LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(allLEDs ? "All LEDs" : "LED ");
+  if (!allLEDs) lcd.print(pin);
+  lcd.setCursor(0, 1);
+  lcd.print(state == 0 ? "OFF" : state == 1 ? "ON" : "BLINK");
+  
+  lastLCDUpdate = millis();
+  lcdNeedsClear = true;
+  
+  // Execute command
+  if (allLEDs) {
+    controlAllLEDs(state, duration);
+  } else {
+    controlSingleLED(pin, state, duration);
+  }
+  
+  Serial.print("OK: LED ");
+  Serial.print(allLEDs ? "ALL" : String(pin));
+  Serial.print(" ");
+  Serial.println(state == 0 ? "OFF" : state == 1 ? "ON" : "BLINK");
+}
+
+void controlSingleLED(int pin, int state, int duration) {
   if (state == 0) {
+    // OFF
     digitalWrite(pin, LOW);
   } 
   else if (state == 1) {
+    // ON
     digitalWrite(pin, HIGH);
     if (duration > 0) {
       delay(duration * 1000);
@@ -214,236 +282,347 @@ void handleLED(String cmd) {
     }
   } 
   else if (state == 2) {
-    // Blink
+    // BLINK
     int times = duration > 0 ? duration * 2 : 10;
     for (int i = 0; i < times; i++) {
       digitalWrite(pin, HIGH);
-      delay(250);
+      delay(BLINK_DELAY);
       digitalWrite(pin, LOW);
-      delay(250);
+      delay(BLINK_DELAY);
     }
   }
-  
-  Serial.print("OK: LED ");
-  Serial.print(pin);
-  Serial.print(" ");
-  Serial.println(state == 1 ? "ON" : state == 2 ? "BLINK" : "OFF");
-  
-  delay(500);
-  lcd.clear();
 }
 
-// ============================================================================
-// SPEAKER HANDLER
-// ============================================================================
-
-void handleSpeaker(String cmd) {
-  // Format: S500:2 (500Hz selama 2 detik) or S500:1;S1000:1 (multiple tones)
+void controlAllLEDs(int state, int duration) {
+  int pins[] = {LED_RED, LED_YELLOW, LED_GREEN, LED_BLUE, LED_WHITE};
   
-  int cmdCount = 0;
-  int lastSemicolon = -1;
-  
-  do {
-    int nextSemicolon = cmd.indexOf(';', lastSemicolon + 1);
-    String singleCmd;
-    
-    if (nextSemicolon == -1) {
-      singleCmd = cmd.substring(lastSemicolon + 1);
-    } else {
-      singleCmd = cmd.substring(lastSemicolon + 1, nextSemicolon);
+  if (state == 0) {
+    // OFF
+    for (int i = 0; i < 5; i++) {
+      digitalWrite(pins[i], LOW);
     }
-    
-    // Process single command
-    if (singleCmd.length() > 0 && singleCmd[0] == 'S') {
-      int colonPos = singleCmd.indexOf(':');
-      if (colonPos != -1) {
-        int frequency = singleCmd.substring(1, colonPos).toInt();
-        int duration = singleCmd.substring(colonPos + 1).toInt();
-        
-        if (cmdCount == 0) {
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.print("Playing Sound");
-          lcd.setCursor(0, 1);
-          lcd.print(frequency);
-          lcd.print("Hz ");
-          lcd.print(duration);
-          lcd.print("s");
-        }
-        
-        if (frequency > 0) {
-          tone(BUZZER, frequency, duration * 1000);
-          delay(duration * 1000);
-          noTone(BUZZER);
-        } else {
-          noTone(BUZZER);
-        }
-        
-        Serial.print("Playing: ");
-        Serial.print(frequency);
-        Serial.print("Hz for ");
-        Serial.print(duration);
-        Serial.println("s");
-        
-        cmdCount++;
+  } 
+  else if (state == 1) {
+    // ON
+    for (int i = 0; i < 5; i++) {
+      digitalWrite(pins[i], HIGH);
+    }
+    if (duration > 0) {
+      delay(duration * 1000);
+      for (int i = 0; i < 5; i++) {
+        digitalWrite(pins[i], LOW);
       }
     }
-    
-    lastSemicolon = nextSemicolon;
-  } while (lastSemicolon != -1);
-  
-  if (cmdCount > 0) {
-    lcd.clear();
+  } 
+  else if (state == 2) {
+    // BLINK
+    int times = duration > 0 ? duration * 2 : 10;
+    for (int i = 0; i < times; i++) {
+      for (int j = 0; j < 5; j++) {
+        digitalWrite(pins[j], HIGH);
+      }
+      delay(BLINK_DELAY);
+      for (int j = 0; j < 5; j++) {
+        digitalWrite(pins[j], LOW);
+      }
+      delay(BLINK_DELAY);
+    }
   }
 }
 
-// ============================================================================
-// SERVO HANDLER
-// ============================================================================
+// ============================================================
+// SPEAKER HANDLER
+// ============================================================
 
-void handleServo(String cmd) {
-  // Format: MF:360:4 (Forward 360° × 4 kali)
-  //         MB:180:1 (Backward 180° × 1 kali)
+void handleSpeaker(char* cmd) {
+  // Format: S1000:2 (1000Hz for 2 seconds)
   
-  int colon1 = cmd.indexOf(':');
-  int colon2 = cmd.indexOf(':', colon1 + 1);
+  char cmdCopy[MAX_INPUT_LENGTH];
+  strncpy(cmdCopy, cmd, MAX_INPUT_LENGTH);
   
-  char direction = cmd.charAt(1);
-  int degrees = cmd.substring(colon1 + 1, colon2).toInt();
-  int repeat = cmd.substring(colon2 + 1).toInt();
+  char* token = strtok(cmdCopy + 1, ";");
+  int toneCount = 0;
   
-  String dirText = (direction == 'F') ? "MAJU" : "MUNDUR";
+  while (token != NULL && toneCount < 10) {
+    char* freqStr = strtok(token, ":");
+    char* durStr = strtok(NULL, ":");
+    
+    if (freqStr && durStr) {
+      int frequency = atoi(freqStr);
+      int duration = atoi(durStr);
+      
+      // Validate frequency
+      if (frequency < MIN_FREQUENCY) frequency = MIN_FREQUENCY;
+      if (frequency > MAX_FREQUENCY) frequency = MAX_FREQUENCY;
+      
+      // Validate duration
+      if (duration > 10) duration = 10;  // Max 10 seconds
+      
+      if (toneCount == 0) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Playing Sound");
+        lcd.setCursor(0, 1);
+        lcd.print(frequency);
+        lcd.print("Hz ");
+        lcd.print(duration);
+        lcd.print("s");
+        
+        lastLCDUpdate = millis();
+        lcdNeedsClear = true;
+      }
+      
+      tone(BUZZER, frequency, duration * 1000);
+      delay(duration * 1000);
+      noTone(BUZZER);
+      
+      toneCount++;
+    }
+    
+    token = strtok(NULL, ";");
+  }
   
+  if (toneCount > 0) {
+    Serial.print("OK: Played ");
+    Serial.print(toneCount);
+    Serial.println(" tones");
+  } else {
+    sendError("Invalid speaker command");
+  }
+}
+
+// ============================================================
+// SERVO HANDLER
+// ============================================================
+
+void handleServo(char* cmd) {
+  // Format: MF:360:4 (Forward 360° × 4 times)
+  
+  char direction = cmd[1];
+  if (direction != 'F' && direction != 'B' && direction != 'L' && 
+      direction != 'R' && direction != 'S') {
+    sendError("Invalid servo direction");
+    return;
+  }
+  
+  char* token = strtok(cmd + 3, ":");
+  if (!token) {
+    sendError("Invalid servo command");
+    return;
+  }
+  
+  int degrees = atoi(token);
+  token = strtok(NULL, ":");
+  int repeat = token ? atoi(token) : 1;
+  
+  // Validate
+  if (degrees < 0 || degrees > 360) degrees = 90;
+  if (repeat < 0 || repeat > 10) repeat = 1;
+  
+  // Update LCD
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Servo: ");
-  lcd.print(dirText);
-  lcd.setCursor(0, 1);
-  lcd.print(degrees);
-  lcd.print("deg x");
-  lcd.print(repeat);
+  lcd.print(direction == 'F' ? "FWD" : direction == 'B' ? "BACK" : 
+           direction == 'L' ? "LEFT" : direction == 'R' ? "RIGHT" : "STOP");
   
-  Serial.print("OK: Servo ");
-  Serial.print(dirText);
-  Serial.print(" ");
-  Serial.print(degrees);
-  Serial.print(" deg x");
-  Serial.print(repeat);
-  Serial.println(" times");
+  lastLCDUpdate = millis();
+  lcdNeedsClear = true;
+  
+  // Execute
+  if (direction == 'S') {
+    // Stop
+    myServo.write(90);
+    Serial.println("OK: Servo STOP");
+    return;
+  }
   
   for (int i = 0; i < repeat; i++) {
-    lcd.setCursor(13, 1);
+    lcd.setCursor(0, 1);
     lcd.print(i + 1);
     lcd.print("/");
     lcd.print(repeat);
     
     if (direction == 'F') {
-      rotateServo(true, degrees);
-    } else {
-      rotateServo(false, degrees);
+      myServo.write(180);
+    } else if (direction == 'B') {
+      myServo.write(0);
+    } else if (direction == 'L') {
+      myServo.write(45);
+    } else if (direction == 'R') {
+      myServo.write(135);
     }
     
-    delay(500);
+    delay((degrees * 1000) / 360);
+    myServo.write(90);  // Stop
+    delay(SHORT_DELAY);
   }
   
-  delay(500);
-  lcd.clear();
+  Serial.print("OK: Servo ");
+  Serial.print(direction);
+  Serial.print(" x");
+  Serial.println(repeat);
 }
 
-void rotateServo(bool clockwise, int degrees) {
-  int speed = clockwise ? 180 : 0;
-  myServo.write(speed);
-  
-  int duration = (degrees * 1000) / 360;
-  delay(duration);
-  
-  myServo.write(90);
-}
-
-// ============================================================================
+// ============================================================
 // TEMPERATURE HANDLER
-// ============================================================================
+// ============================================================
 
 void handleTemperature() {
-  DHT.read(DHT_PIN);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Reading Temp...");
+  
+  int result = DHT.read(DHT_PIN);
+  
+  if (result != 0) {
+    sendError("DHT sensor failed");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Sensor Error!");
+    lastLCDUpdate = millis();
+    lcdNeedsClear = true;
+    return;
+  }
+  
+  float temp = DHT.temperature;
+  
+  // Validate reading
+  if (temp < MIN_TEMP || temp > MAX_TEMP) {
+    sendError("Invalid temperature");
+    return;
+  }
   
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Mengukur Suhu...");
-  delay(500);
-  
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Suhu: ");
-  lcd.print(DHT.temperature);
+  lcd.print("Temp: ");
+  lcd.print(temp, 1);
   lcd.print("C");
   lcd.setCursor(0, 1);
-  lcd.print("Kelembaban:");
-  lcd.print(DHT.humidity);
+  lcd.print("Humid: ");
+  lcd.print(DHT.humidity, 1);
   lcd.print("%");
   
-  Serial.print("TEMP: ");
-  Serial.print(DHT.temperature);
-  Serial.println(" C");
+  lastLCDUpdate = millis();
+  lcdNeedsClear = true;
   
-  // Auto control LED berdasarkan suhu
-  if (DHT.temperature > 28) {
-    digitalWrite(LED_GREEN, HIGH);
-    digitalWrite(LED_WHITE, LOW);
-  } else {
-    digitalWrite(LED_GREEN, LOW);
-    digitalWrite(LED_WHITE, HIGH);
+  Serial.print("TEMP:");
+  Serial.println(temp, 1);
+  
+  // Auto LED control
+  if (temp > 28) {
+    digitalWrite(LED_RED, HIGH);
+    digitalWrite(LED_BLUE, LOW);
+  } else if (temp < 20) {
+    digitalWrite(LED_RED, LOW);
+    digitalWrite(LED_BLUE, HIGH);
   }
-  
-  delay(3000);
-  lcd.clear();
 }
 
-// ============================================================================
+// ============================================================
 // HUMIDITY HANDLER
-// ============================================================================
+// ============================================================
 
 void handleHumidity() {
-  DHT.read(DHT_PIN);
-  
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Kelembaban:");
-  lcd.setCursor(0, 1);
-  lcd.print(DHT.humidity);
-  lcd.print(" %");
+  lcd.print("Reading Humid...");
   
-  Serial.print("HUMIDITY: ");
-  Serial.print(DHT.humidity);
-  Serial.println(" %");
+  int result = DHT.read(DHT_PIN);
   
-  delay(3000);
-  lcd.clear();
-}
-
-// ============================================================================
-// LCD HANDLER
-// ============================================================================
-
-void handleLCD(String cmd) {
-  // Format: D:halo dunia
-  String message = cmd.substring(2);
-  message.trim();
-  
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  
-  if (message.length() <= 16) {
-    lcd.print(message);
-  } else {
-    lcd.print(message.substring(0, 16));
-    lcd.setCursor(0, 1);
-    lcd.print(message.substring(16));
+  if (result != 0) {
+    sendError("DHT sensor failed");
+    return;
   }
   
-  Serial.print("OK: LCD Display: ");
+  float humidity = DHT.humidity;
+  
+  // Validate
+  if (humidity < MIN_HUMIDITY || humidity > MAX_HUMIDITY) {
+    sendError("Invalid humidity");
+    return;
+  }
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Humidity:");
+  lcd.setCursor(0, 1);
+  lcd.print(humidity, 1);
+  lcd.print(" %");
+  
+  lastLCDUpdate = millis();
+  lcdNeedsClear = true;
+  
+  Serial.print("HUMID:");
+  Serial.println(humidity, 1);
+}
+
+// ============================================================
+// LCD HANDLER
+// ============================================================
+
+void handleLCD(char* cmd) {
+  // Format: D:Hello World
+  
+  char* message = cmd + 2;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  
+  int len = strlen(message);
+  if (len <= 16) {
+    lcd.print(message);
+  } else {
+    // Split into two lines
+    for (int i = 0; i < 16 && i < len; i++) {
+      lcd.print(message[i]);
+    }
+    if (len > 16) {
+      lcd.setCursor(0, 1);
+      for (int i = 16; i < 32 && i < len; i++) {
+        lcd.print(message[i]);
+      }
+    }
+  }
+  
+  lastLCDUpdate = millis();
+  lcdNeedsClear = true;
+  
+  Serial.print("OK: LCD ");
   Serial.println(message);
+}
+
+// ============================================================
+// ERROR HANDLING
+// ============================================================
+
+void sendError(const char* message) {
+  Serial.print("ERROR: ");
+  Serial.println(message);
+  errorCount++;
+}
+
+void handleCriticalError() {
+  // Critical error - reset everything
+  Serial.println("CRITICAL: Too many errors, resetting...");
+  
+  // Turn off all outputs
+  digitalWrite(LED_RED, LOW);
+  digitalWrite(LED_YELLOW, LOW);
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_BLUE, LOW);
+  digitalWrite(LED_WHITE, LOW);
+  noTone(BUZZER);
+  myServo.write(90);
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("SYSTEM ERROR!");
+  lcd.setCursor(0, 1);
+  lcd.print("Resetting...");
   
   delay(3000);
-  lcd.clear();
+  
+  // Software reset
+  asm volatile ("  jmp 0");
 }
